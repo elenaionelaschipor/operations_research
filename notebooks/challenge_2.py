@@ -96,7 +96,7 @@ def TrainingMLP(Xs, Ys, nh=2,lambda_ = 0.25, return_weights = False):
     for j in range(hidden_layer_dim+1):
             # decomposition of W2
         w2_neg.append( model.addVar(vtype=GRB.BINARY, name=f"w2_neg_{j}"))
-        w2_zero.append(  model.addVar(vtype=GRB.BINARY, name=f"w2_zero_{j}"))
+        w2_zero.append( model.addVar(vtype=GRB.BINARY, name=f"w2_zero_{j}"))
         w2_pos.append( model.addVar(vtype=GRB.BINARY, name=f"w2_pos_{j}"))
 
         model.addConstr(w2_neg[j-1] + w2_zero[j-1] + w2_pos[j-1] == 1)
@@ -132,7 +132,7 @@ def TrainingMLP(Xs, Ys, nh=2,lambda_ = 0.25, return_weights = False):
     for j in range(hidden_layer_dim+1):
         abs_w_2[j] = model.addVar(obj = lambda_, vtype= GRB.BINARY, name = f"abs_W2_{j}")
         model.addConstr(abs_w_2[j] == w2_neg[j-1] + w2_pos[j-1])
-        
+
 
 
 
@@ -208,21 +208,22 @@ def TrainingMLP(Xs, Ys, nh=2,lambda_ = 0.25, return_weights = False):
     else:
         print("Warning: something is wrong. The status of the model is:", model.Status)
 
-
-
+ # cover sono quelli dello zaino quando ho combi affine di 01
+ 
 if __name__ == "__main__":
     from sklearn.model_selection import train_test_split
     # for data_train, data_test in zip(['train_nine_four'], ["all_nine_four"]): 
     # for data_train, data_test in zip(['train_three_four'], ["all_three_four"]): 
-    for data_train, data_test in zip(['train_three_four', 'train_nine_four'], ["all_three_four", "all_nine_four"]): 
+    for data_train in ['all_three_four', "all_nine_four"]: 
+    # for data_train, data_test in zip(['train_three_four', 'train_nine_four'], ["all_three_four", "all_nine_four"]): 
         print("========================"+data_train+"============================")
-        X_train, y_train = Parse('../data/'+data_train+'.csv')
-        X_test, y_test = Parse('../data/'+data_test+'.csv')
-        # X_train, X_test, y_train, y_test = train_test_split(X_all,y_all, test_size=0.7)
-        if data_train == 'train_nine_four':
+        X_all, y_all = Parse('../data/'+data_train+'.csv')
+        
+        X_train, X_test, y_train, y_test = train_test_split(X_all,y_all, test_size=0.3)
+        if data_train == 'all_nine_four':
             lambda_= 0.0001
             nh = 5
-        if data_train == "train_three_four":
+        if data_train == "all_three_four":
             lambda_ = 0
             nh = 2
     
@@ -239,7 +240,11 @@ if __name__ == "__main__":
         # print("plot of the weights on the same axes of the images")
         # plt.imshow(W1[1:, 0].reshape(-1).reshape((28, 28)), cmap='binary')
         # plt.show()
+        if data_train == 'train_nine_four':
+            print("doveva essere:", y_train[-8])
+            print("viene classificato come:", F(X_train[-8]))
+            print("plotting disegno")
+            plt.imshow(X_train[-8].reshape((28,28)), cmap="binary")
+            plt.show()
         
-    
-
 
