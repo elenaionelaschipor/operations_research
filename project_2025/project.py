@@ -136,7 +136,7 @@ def Plot_graph_cuts(sets, G):
         fig, ax = Plot_graph(V, stop = True, values = None, scattercolor = colors[idx], fig = fig, ax = ax)
     plt.show()
 
-#--------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
 
 def Plot_image_cuts(sets, G):
     h = max([a[1] for a in G.nodes()]) + 1
@@ -155,22 +155,30 @@ def Plot_image_cuts(sets, G):
     plt.axis('off')
     plt.show()
 
+# --------------------------------------------------------------------------------
+
+def volume(S, G):
+    return sum([ sum([G.edges[node, k]["weight"] if (node,k) in G.edges() else 0 for k in G.nodes()] ) for node in S])
+
+def Laplacian(G):
+    return np.diag([volume([singoletto], G) for singoletto in G.nodes()]) - nx.adjacency_matrix(G)
+
 
 if __name__ == "__main__":
-    cane = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/cane.jpg')
+    image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/cane_piccolo.jpg')
 
-    plt.imshow(cane)
+    plt.imshow(image)
     plt.axis('off')
     plt.show()
 
-    cane_bn = np.mean(cane, axis=2)
+    image_bn = np.mean(image, axis=2)
 
-    plt.imshow(cane_bn, cmap='gray')
+    plt.imshow(image_bn, cmap='gray')
     plt.axis('off')
     plt.show()
 
-    # print(cane_bn)
-    G = costruisci_grafo(cane_bn)
+    # print(image_bn)
+    G = costruisci_grafo(image_bn)
     # print(G.edges(data=True))
     Plot_graph(G, values = [k[2]['weight'] for k in G.edges(data=True)])   # giustamente in una immagine ad alta risoluzione non si vede il reticolo
 
@@ -189,7 +197,8 @@ if __name__ == "__main__":
 
     print("cut cost:", capacity(sets, G))
 
-    print("plotting cuts")
-    Plot_graph_cuts(sets, G)
+    # print("plotting cuts")
+    # Plot_graph_cuts(sets, G)
 
-    Plot_image_cuts(sets, G)
+    # Plot_image_cuts(sets, G)
+    print(Laplacian(G))
