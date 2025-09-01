@@ -1,0 +1,7 @@
+1) usare gurobi oppure il suo algoritmo? 
+can i do both? penso proprio gurobi
+2) immagini scelte
+3) penso convenga costruire prima i 
+    grafi e capire come rappresentarli
+4) poi scrivere tutti i problemi di minimo 
+    di cui parla usando gurobi come risolutore
