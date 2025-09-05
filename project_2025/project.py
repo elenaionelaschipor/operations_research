@@ -1,31 +1,39 @@
 # created by Elena
 # 30/08/25
 
-
-
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc   
-import gurobipy as GRB
+import gurobipy as grb
 
 
 # -----------------------------------------------------------------
 
-def sim(pixel1, pixel2):  # misura di somiglianza
+def sim1(pixel1, pixel2):  # misura di somiglianza
     # pixel1 and pixel2 are both grayscale pixel values
-    return abs(pixel1 - pixel2)/255
+    return 1/(abs(pixel1 - pixel2)/255)
+
+def sim2(pixel1, pixel2):
+    return 1/(abs(pixel1 - pixel2)/255)**2
 # -----------------------------------------------------------------
-def costruisci_grafo(image):
+
+def costruisci_grafo_base(image):
     G = nx.Graph()
     h, w = image.shape
     for i in range(h):
         for j in range(w):
             G.add_node((i, j), intensity=image[i, j])
             if i > 0:
-                G.add_edge((i, j), (i-1, j), weight=sim(image[i, j], image[i-1, j]))
+                G.add_edge((i, j), (i-1, j), 
+                weight1=sim1(image[i, j], image[i-1, j]),
+                weight2=sim2(image[i, j], image[i-1, j])
+                )
             if j > 0:
-                G.add_edge((i, j), (i, j-1), weight=sim(image[i, j], image[i, j-1]))
+                G.add_edge((i, j), (i, j-1),
+                weight1=sim1(image[i, j], image[i, j-1]), 
+                weight2=sim2(image[i, j], image[i, j-1])
+                )
     return G
 
 
@@ -46,8 +54,6 @@ def Plot_graph(G,stop = False, values = None, scattercolor = "grey", fig = None,
     if fig == None and ax == None:
         fig, ax = plt.subplots()
 
-
-    # ...existing code...
     # Normalizza i valori tra 0 e 1
     if values == None:
         values = [1 for _ in range(len(G.nodes()))]  
@@ -56,18 +62,17 @@ def Plot_graph(G,stop = False, values = None, scattercolor = "grey", fig = None,
     else: 
         norm = plt.Normalize(min(values), max(values))
     from matplotlib.colors import LinearSegmentedColormap
-    white_to_rainbow = LinearSegmentedColormap.from_list('white_to_rainbow', ['white', "cyan", "blue", "green", "yellow", "orange", "red", "purple", 'black'])
-    cmap = white_to_rainbow
-        
+    
+    rainbow_to_white = LinearSegmentedColormap.from_list(
+    'rainbow_to_white',
+    ['black', 'purple', 'red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'white']
+    )
+    cmap = rainbow_to_white
     lc = mc.LineCollection(
         lines,
         colors=[cmap(norm(x)) for x in values]
     )
-    # ...existing code...
-    # lc = mc.LineCollection(lines,
-    #                        colors = ['white' if x < 0.1 else "blue" if x<0.2 else "red" if x <0.3 else 'orange' if x<0.4 else "pink" if x<0.5 else "purple" if x <0.7 else "darkgreen" if x <0.8 else "green" if x <0.9 else "black" for x in values])
-
-
+   
     ax.add_collection(lc)
     ax.scatter([j for i,j in Ps], [i for i,j in Ps], 
                 s=20, alpha=0.8, color=scattercolor)           # plot the points
@@ -97,7 +102,7 @@ def get_cutted_edges(S, S_bar, G):
 
 
 # ------------------------------------------------------------------------------------
-def capacity(sets, G, cutted_edges = None):
+def capacity1(sets, G, cutted_edges = None):
     if len(sets) == 1:
         S = sets[0]
         # S_bar = nx.difference(G, S)
@@ -107,7 +112,7 @@ def capacity(sets, G, cutted_edges = None):
         if cutted_edges == None:
             cutted_edges = get_cutted_edges(S, S_bar, G)
             print(cutted_edges)
-        return sum([G[u][v]['weight'] for u, v in cutted_edges])
+        return sum([G[u][v]['weight1'] for u, v in cutted_edges])
         
     else:
         if nx.union_all(sets).nodes() == G.nodes():
@@ -118,7 +123,7 @@ def capacity(sets, G, cutted_edges = None):
                 V_k_bar.remove_nodes_from(n for n in G if n in V_k)
                 if cutted_edges == None:
                     cutted_edges = get_cutted_edges(V_k, V_k_bar, G)
-                tot += 0.5 * sum([G[u][v]['weight'] for u, v in cutted_edges])
+                tot += 0.5 * sum([G[u][v]['weight1'] for u, v in cutted_edges])
             return tot
         else:
             raise ValueError("Invalid sets, the union is not G")
@@ -158,10 +163,25 @@ def Plot_image_cuts(sets, G):
 # --------------------------------------------------------------------------------
 
 def volume(S, G):
-    return sum([ sum([G.edges[node, k]["weight"] if (node,k) in G.edges() else 0 for k in G.nodes()] ) for node in S])
+    return sum([ sum([G.edges[node, k]["weight1"] if (node,k) in G.edges() else 0 for k in G.nodes()] ) for node in S])
 
 def Laplacian(G):
     return np.diag([volume([singoletto], G) for singoletto in G.nodes()]) - nx.adjacency_matrix(G)
+
+
+# -----------------------------------------------------------------------
+
+def costruisci_grafo_st(G, lambda_, ):
+    G = nx.Graph()
+    h, w = image.shape
+    for i in range(h):
+        for j in range(w):
+            G.add_node((i, j), intensity=image[i, j])
+            if i > 0:
+                G.add_edge((i, j), (i-1, j), weight1=sim(image[i, j], image[i-1, j]))
+            if j > 0:
+                G.add_edge((i, j), (i, j-1), weight1=sim(image[i, j], image[i, j-1]))
+    return G
 
 
 if __name__ == "__main__":
@@ -180,7 +200,7 @@ if __name__ == "__main__":
     # print(image_bn)
     G = costruisci_grafo(image_bn)
     # print(G.edges(data=True))
-    Plot_graph(G, values = [k[2]['weight'] for k in G.edges(data=True)])   # giustamente in una immagine ad alta risoluzione non si vede il reticolo
+    Plot_graph(G, values = [k[2]['weight1'] for k in G.edges(data=True)])   # giustamente in una immagine ad alta risoluzione non si vede il reticolo
 
     print("prova del 9 con la capacità")
     print("capacità di G con taglio G = ",  capacity([G], G)) 
@@ -201,4 +221,14 @@ if __name__ == "__main__":
     # Plot_graph_cuts(sets, G)
 
     # Plot_image_cuts(sets, G)
-    print(Laplacian(G))
+    # print(Laplacian(G))
+
+
+ 
+
+
+
+
+
+
+    
