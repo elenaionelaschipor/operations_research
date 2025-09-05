@@ -7,7 +7,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc   
-
+import gurobipy as GRB
 
 
 # -----------------------------------------------------------------
