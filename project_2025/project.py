@@ -10,17 +10,18 @@ import gurobipy as grb
 
 # -----------------------------------------------------------------
 
-def sim1(pixel1, pixel2):  # misura di somiglianza
+def sim1(pixel1, pixel2):  # misura di somiglianza esponenziale
     # pixel1 and pixel2 are both grayscale pixel values
-    return 1/(0.001 + abs(pixel1 - pixel2)/255)
+    return np.exp(-abs(pixel1 - pixel2)/255)
 
 def sim2(pixel1, pixel2):
-    return 1/(0.001 + abs(pixel1 - pixel2)/255)**2
+    return 1/(1 + (abs(pixel1 - pixel2)/255)**2)
 # -----------------------------------------------------------------
 
 def costruisci_grafo_base(image):
     G = nx.Graph()
     h, w = image.shape
+    print(h,w)
     for i in range(h):
         for j in range(w):
             G.add_node((i, j), intensity=image[i, j])
@@ -42,7 +43,7 @@ def costruisci_grafo_base(image):
 def Plot_graph(G,stop = False, values = None, scattercolor = "grey", fig = None, ax = None):
     # adattato dal Plot_tour fatto a lezione
     # G = grafo
-    # values = vettore dei pesi associati ai nodi, consigliati tra 0 e 1
+    # values = vettore dei pesi associati ai edges, consigliati tra 0 e 1
     
     # Ps = positions, list of points in R^2 (coordinates!)
     # Ls = lists of successive points that i visit (indices!)
@@ -143,7 +144,7 @@ def Plot_graph_cuts(sets, G):
 
 # --------------------------------------------------------------------------------
 
-def Plot_image_cuts(sets, G):
+def Plot_image_cuts(sets, G, source_pixels = None, sink_pixels = None):
     h = max([a[1] for a in G.nodes()]) + 1
     w = max([a[0] for a in G.nodes()]) + 1
 
@@ -157,6 +158,12 @@ def Plot_image_cuts(sets, G):
         for node in V.nodes():
             image[node[0], node[1], :] = 0.7 * image[node[0], node[1], :] + 0.3*np.array([cmap(idx % cmap.N)[:3]])
     plt.imshow(image)
+    if source_pixels != None and sink_pixels != None:
+        for sp in source_pixels:
+            plt.scatter(sp[0], sp[1], color='blue', s=100, marker='o', label='Source Pixel' if sp == source_pixels[0] else "")
+        for tp in sink_pixels:
+            plt.scatter(tp[0], tp[1], color='red', s=100, marker='x', label='Sink Pixel' if tp == sink_pixels[0] else "")
+        plt.legend(loc='upper right')
     plt.axis('off')
     plt.show()
 
@@ -205,34 +212,46 @@ def costruisci_grafo_st(G, lambda_, source, sink):
 def MinCut(image, source_pixels, sink_pixels, lambda_):
     G = costruisci_grafo_base(image)
     # source_pixels devono essere una lista [(x1,y1), (x2,y2)] e sink_pixels [(x3,y3), (x4,y4)] 
-    source = (source_pixels[0], source_pixels[1]) # come edge del grafo
-    sink = (sink_pixels[0], sink_pixels[1]) # come edge del grafo
+    source = (source_pixels[1], source_pixels[0]) # come edge del grafo
+    sink = (sink_pixels[1], sink_pixels[0]) # come edge del grafo
 
+    # print(source, sink)
     # G_st = costruisci_grafo_st(G, lambda_, source, sink) # ora ho il grafo con s e t come nodi
     
     
     from gurobipy import Model, GRB, quicksum
     model = Model()
-    
+    model.setParam("OutputFlag", 0)
+    print("##########   MODEL CREATED")
 
     # ora dato il grafo dobbiamo scrivere il problema di min cut
     
     x = {}      # x[node] = 1 se node è nel source set
     for index, node in enumerate(G.nodes()): 
-        x[node] = model.addVar(lb=0, ub=1,  vtype=GRB.CONTINUOUS, name=f"x_{node}")
+        x[node] = model.addVar(lb=0, ub=1,  vtype=GRB.CONTINUOUS, name=f"x_{node}") 
 
     y = {}      # y[edge] = 1 se edge è nel source set
     for index, edge in enumerate(G.edges()): 
         # print(edge)
         y[edge] = model.addVar(lb=0, ub=1, obj = - lambda_*G.edges[edge]['weight2'],  vtype=GRB.CONTINUOUS, name=f"y_{edge}")
+    
     z = {}      # z[edge] = 1 se edge è nel cut
     for index, edge in enumerate(G.edges()): 
         z[edge] = model.addVar(lb=0, ub=1, obj = G.edges[edge]['weight1'], vtype=GRB.CONTINUOUS, name=f"z_{edge}")
+        z[(edge[1], edge[0])] = z[edge]  # perchè il grafo è undirected
+    # constraints su source e sink (devo fare questo if perchè il grafo è undirected ma il dizionario è directed)
+    if source in y:
+        model.addConstr(y[source] == 1)
+        print("weights around the source")
+        print(G.edges[source]["weight1"])
 
+    elif (source[1], source[0]) in y:
+        model.addConstr(y[(source[1], source[0])] == 1)
 
-    # constraints su source e sink
-    model.addConstr(y[source] == 1)
-    model.addConstr(y[sink] == 0) 
+    if sink in y:
+        model.addConstr(y[sink] == 0)
+    elif (sink[1], sink[0]) in y:
+        model.addConstr(y[(sink[1], sink[0])] == 0)
 
     for edge in G.edges():
         # se y_ij = 1 allora x_i = 1 e x_j = 1
@@ -241,22 +260,27 @@ def MinCut(image, source_pixels, sink_pixels, lambda_):
         # se x_i = x_j = 1 allora z_ij = 0 (sono nello stesso set) (idem se tutto 0)
         # se x_i != x_j allora z_ij = 1 (sono in set diversi)
         model.addConstr(z[edge] >= x[edge[0]] - x[edge[1]])
-        model.addConstr(z[edge] >= x[edge[1]] - x[edge[0]])
+        model.addConstr(z[(edge[1], edge[0])] >= x[edge[1]] - x[edge[0]])
+        model.addConstr(y[edge] >= x[edge[0]] + x[edge[1]] - 1)
+        model.addConstr(1+z[edge] >= y[edge])
+        model.addConstr(1+y[edge] >= z[edge])
 
-
+    print("######## MODEL")
     model.modelSense = grb.GRB.MINIMIZE
     model.update()
+    
+    model.write("mincut_lambda.lp") 
 
     model.optimize()
-
     if model.status == GRB.OPTIMAL:
+        print("##########   MODEL OPTIMAL")
         print('Optimal objective: %g' % model.objVal)
         sol_x = model.getAttr('x', x)
         sol_y = model.getAttr('x', y)
         sol_z = model.getAttr('x', z)
         # print("solution x:", sol_x)
-        # print("solution y:", sol_y)
-        # print("solution z:", sol_z)
+        # print("solution y:", [(y, sol_y[y]) for y in sol_y if sol_y[y] < 0.5])
+        # print("solution z:", [(z, sol_z[z]) for z in sol_z if sol_z[z]> 0.5])
 
         source_set = [node for node in G.nodes() if sol_x[node] > 0.5]
         sink_set = [node for node in G.nodes() if sol_x[node] <= 0.5]
@@ -273,90 +297,99 @@ def parametric_min_cut(image, source_pixels, sink_pixels, time_limit = 300, max_
     start_time = time()
     G = costruisci_grafo_base(image)
     # source_pixels devono essere una lista [(x1,y1), (x2,y2)] e sink_pixels [(x3,y3), (x4,y4)] 
-    source = (source_pixels[0], source_pixels[1]) # come edge del grafo
-    sink = (sink_pixels[0], sink_pixels[1]) # come edge del grafo
- 
-    best_lambda = None
-    best_cut_value = float('inf')
-    best_source_set = None
-    best_sink_set = None
+    source = (source_pixels[1], source_pixels[0]) # come edge del grafo
+    sink = (sink_pixels[1], sink_pixels[0]) # come edge del grafo
 
-    lambda_1 = -1.0
-    lambda_3 = 1.0
-    iter = 0
-    while lambda_3 - lambda_1 > 0.01:  # precisione di 0.01
-        source_1, sink_1, cut_value_1, sol_x1, sol_y1, sol_z1 = MinCut(image, source_pixels, sink_pixels, lambda_1)
-        source_3, sink_3, cut_value_3, sol_x3, sol_y3, sol_z3 = MinCut(image, source_pixels, sink_pixels, lambda_3)
+    # best_lambda = None
+    # best_cut_value = float('inf')
+    # best_source_set = None
+    # best_sink_set = None
+    iter_ = 0
+
+    t = 1
+    source_set, sink_set, cut, sol_x, sol_y, sol_z = MinCut(image, source_pixels, sink_pixels, t) 
+
+    while abs(cut) >=  0.001:
+        t = sum([G.edges[e]['weight1'] for e in G.edges() if sol_z[e] > 0.5]) / sum([G.edges[e]['weight2'] for e in G.edges() if sol_y[e] > 0.5])
+        print("t = ", t, "------------------------------------------------")
+        source_set, sink_set, cut, sol_x, sol_y, sol_z = MinCut(image, source_pixels, sink_pixels, t) 
+        iter_ += 1
+        if time() - start_time > time_limit or iter_ >= max_iter:   
+            print("Time limit or max iterations reached.")
+            break
+    
+    # lambda_1 = -10000
+    # lambda_3 = 10000
+    # iter_ = 0
+    # source_1, sink_1, cut_value_1, sol_x1, sol_y1, sol_z1 = MinCut(image, source_pixels, sink_pixels, lambda_1)
+    # source_3, sink_3, cut_value_3, sol_x3, sol_y3, sol_z3 = MinCut(image, source_pixels, sink_pixels, lambda_3)
+    # print("#################### calculated cuts for lambda_1 and lambda_3")
+    # while lambda_3 - lambda_1 > 0.01:  # precisione di 0.01
         
-        print("########################## Iteration {}, lambda_1 = {}, cut_value_1 = {}, lambda_3 = {}, cut_value_3 = {}".format(iter, lambda_1, cut_value_1, lambda_3, cut_value_3))
+    #     if cut_value_1 == None or cut_value_3 == None:
+    #         raise ValueError("MinCut did not return a valid solution for given lambda values.")
+    #     if source_1 == source_3 and sink_1 == sink_3:
+    #         print("Same cut found for both lambda values.")
+    #     if source_1 != source_3 or sink_1 != sink_3:
+    #         print("Different cuts found for lambda_1 = {} and lambda_3 = {}".format(lambda_1, lambda_3))
+
+
+    #     if cut_value_1 < 0 and cut_value_3 < 0 or cut_value_1 > 0 and cut_value_3 > 0:
+    #         raise ValueError("You should find better lambdas, the cuts are both of the same sign")
+
+    #     if abs(cut_value_1) <= 0.00001:
+    #         best_lambda = lambda_1
+    #         best_cut_value = cut_value_1
+    #         best_source_set = source_1
+    #         best_sink_set = sink_1 
+
+    #     if abs(cut_value_3) <= 0.00001:
+    #         best_lambda = lambda_3
+    #         best_cut_value = cut_value_3
+    #         best_source_set = source_3
+    #         best_sink_set = sink_3
+
+    #     print("################ calculating cuts for lambda_2")
+    #     lambda_2 = (lambda_1+lambda_3)/2
+    #     source_2, sink_2, cut_value_2, sol_x2, sol_y2, sol_z2 = MinCut(image, source_pixels, sink_pixels, lambda_2)
+
         
-        if source_1 == None or source_3 == None:
-            raise ValueError("MinCut did not return a valid solution for given lambda values.")
-        if source_1 == source_3 and sink_1 == sink_3:
-            print("Same cut found for both lambda values.")
-        if source_1 != source_3 or sink_1 != sink_3:
-            print("Different cuts found for lambda_1 = {} and lambda_3 = {}".format(lambda_1, lambda_3))
-            
+    #     if abs(cut_value_2) <= 0.00001:
+    #         best_lambda = lambda_2
+    #         best_cut_value = cut_value_2
+    #         best_source_set = source_2
+    #         best_sink_set = sink_2
+    #         break
+    #     print("############################## updating")
+    #     if cut_value_2 < 0:
+    #         lamnda_1 = lambda_2
+    #         source_1 = source_2
+    #         sink_1 = sink_2
+    #         cut_value_1 = cut_value_2
+    #         sol_x1 = sol_x2
+    #         sol_y1 = sol_y2
+    #         sol_z1 = sol_z2
+        
+    #     if cut_value_2 > 0 :
+    #         lambda_3 = lambda_2
+    #         source_3 = source_2
+    #         sink_3 = sink_2
+    #         cut_value_3 = cut_value_2
+    #         sol_x3 = sol_x2
+    #         sol_y3 = sol_y2
+    #         sol_z3 = sol_z2
 
-        beta_1 = sum([G.edges[e]['weight2'] for e in G.edges() if sol_y1[e] < 0.5]) - 0 # qua ci sarebbero degli infiniti ma tanto quelli sicuro stanno in T quindi non li conto
-        beta_3 = sum([G.edges[e]['weight2'] for e in G.edges() if sol_y3[e] < 0.5]) - 0
+    #     iter_ += 1
+    #     if time() - start_time > time_limit or iter_ >= max_iter:   
+    #         print("Time limit or max iterations reached.")
+    #         break
 
-
-        alpha_1 = cut_value_1 - lambda_1*beta_1
-        alpha_3 = cut_value_3 - lambda_3*beta_3
-        print("###########################alpha_1 = {}, beta_1 = {}, alpha_3 = {}, beta_3 = {}".format(alpha_1, beta_1, alpha_3, beta_3))
-        lambda_2 = (alpha_3 - alpha_1) / (beta_1 - beta_3)
-        print("########################## Iteration {}, lambda_1 = {}, lambda_3 = {}, lambda_2 = {}".format(iter, lambda_1, lambda_3, lambda_2))
-        source_2, sink_2, cut_value_2, sol_x2, sol_y2, sol_z2 = MinCut(image, source_pixels, sink_pixels, lambda_2)
-        beta_2 = sum([G.edges[e]['weight2'] for e in G.edges() if sol_y2[e] < 0.5]) - 0
-
-        alpha_2 = cut_value_2 - lambda_2*beta_2
-
-        if abs(beta_2) <= 0.0000000000001:
-            best_lambda = lambda_2
-            best_source_set = source_2
-            best_sink_set = sink_2
-            best_cut_value = cut_value_2
-            break
-
-        if beta_2 > 0:
-            print(" ------------------ Updating lower bound.")
-            lambda_1 = lambda_2
-            sink_1 = sink_2
-            source_1 = source_2
-            cut_value_1 = cut_value_2
-            alpha_1 = alpha_2
-            beta_1 = beta_2
-            sol_x1 = sol_x2
-            sol_y1 = sol_y2
-            sol_z1 = sol_z2
-        else:
-            print(" ------------------ Updating upper bound.")
-            lambda_3 = lambda_2
-            sink_3 = sink_2
-            source_3 = source_2
-            cut_value_3 = cut_value_2
-            alpha_3 = alpha_2
-            beta_3 = beta_2
-            sol_x3 = sol_x2
-            sol_y3 = sol_y2
-            sol_z3 = sol_z2
-
-        iter += 1
-        print("Current lambda range: [{}, {}] --------------------------------- ".format(lambda_1, lambda_3))
-        if time() - start_time > time_limit:
-            print("Time limit reached.")
-            break
-        if iter > max_iter:
-            print("Maximum iterations reached.")
-            break
-
-    return best_source_set, best_sink_set, best_lambda, best_cut_value
+    return source_set, sink_set, cut, sol_x, sol_y, sol_z, t
 
 
 
 if __name__ == "__main__":
-    image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/cane_piccolo.jpg')
+    image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/nerojpg.jpg')
 
     plt.imshow(image)
     plt.axis('off')
@@ -395,10 +428,26 @@ if __name__ == "__main__":
     # print(Laplacian(G))
 
 
-    source_set, sink_set, best_lambda, best_cut_value = parametric_min_cut(image_bn, [(5,5), (5, 6)], [(40, 20), (40,21)])
+    lambda_ = 0.0000000000001
+    sink_pixels = [(5,5), (5,6)]
+    # sink_pixels = [(55,50), (55, 51)] per cane piccolo
+    # source_pixels = [(30,20),(31,20)] per cane piccolissimo
+    # source_pixels = [(95, 70), (95, 71)]
+    source_pixels = [(25, 25), (25, 26)]
+    # source_set, sink_set, cut_value, sol_x, sol_y, sol_z = MinCut(image_bn, source_pixels, sink_pixels, lambda_)
+    # print("Cut value for lambda =", lambda_, "is", cut_value)
+    # print("Source set size:", len(source_set)) 
+    # print("Sink set size:", len(sink_set))
+    # Plot_image_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G, source_pixels, sink_pixels)
 
-    print("Best lambda:", best_lambda)
-    print("Best cut value:", best_cut_value)
+    # Plot_graph_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G)
+
+
+
+    source_set, sink_set, cut, sol_x, sol_y, sol_z, t = parametric_min_cut(image_bn, source_pixels, sink_pixels, time_limit=300, max_iter=20)
+
+    print("Best lambda:", t)
+    print("Best cut value:", cut)
 
 
 
