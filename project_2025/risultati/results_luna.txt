@@ -1,0 +1,17 @@
+LUNA SEGMENTATA: dato da queste misure di somiglianza:
+
+def sim1(pixel1, pixel2):  # misura di somiglianza esponenziale
+    # pixel1 and pixel2 are both grayscale pixel values
+    return np.exp(-abs(pixel1 - pixel2))
+
+def sim2(pixel1, pixel2):
+    return 1/(1 + (abs(pixel1 - pixel2))**2)
+
+
+output: immagine + 
+
+Time limit or max iterations reached.
+Best lambda: 3.892646307118059e-09
+Best cut value: 1.2713110382270507
+Source set size: 4939
+Sink set size: 62561

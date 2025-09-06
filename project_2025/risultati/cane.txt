@@ -1,0 +1,44 @@
+cane è a risoluzione + alta
+ho messo time limit 5 minuti, iter limit 50
+mi viene da pensare che sigma debba essere proporzionale al n* di pixel??? forse inversamente???????
+
+
+sigma = 0.1 bocciato, idk what happened
+
+
+
+# forse ho sbagliato source pixel :(
+sigma  = 1  bella partizione sensata
+  
+Optimal objective: 0.000397539
+Time limit or max iterations reached. (sicuro time)
+Best lambda: 9.23669702618865e-11
+Best cut value: 0.0003975385219886175
+Source set size: 20795
+Sink set size: 46705
+
+
+
+sigma = 10: partizione banale
+
+Optimal objective: 2.27904
+warning, same value of t
+Generating the same partition and the same solutions. Stopping to avoid looping
+Best lambda: 0.0
+Best cut value: 2.2790437035481723
+Source set size: 2
+Sink set size: 67498
+
+
+sigma = 100: partizione banale 
+Optimal objective: 2.94244
+Time limit or max iterations reached.
+Best lambda: 0.0
+Best cut value: 2.9424447717159525
+Source set size: 2
+Sink set size: 67498
+
+
+
+
+sigma = 500: ???

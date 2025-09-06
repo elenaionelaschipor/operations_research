@@ -1,0 +1,16 @@
+cane piccolo, come cane piccolissimo
+
+sigma = 1
+Optimal objective: 3.07378e-07
+Best lambda: 3.186420299482367e-12
+Best cut value: 3.0737758451973e-07
+Source set size: 2718
+Sink set size: 4782
+
+sigma = 10
+Optimal objective: 1.09158
+Time limit or max iterations reached.  (qua maxit = 20)
+Best lambda: 0.0
+Best cut value: 1.0915801773028833
+Source set size: 2752
+Sink set size: 4748

@@ -1,0 +1,9 @@
+stesse cose di results_luna
+output: immagine (perfetta!!!) + 
+
+
+Optimal objective: 1.00447e-106
+Best lambda: 2.505225331500719e-110
+Best cut value: 1.0044731552686124e-106
+Source set size: 292
+Sink set size: 2208

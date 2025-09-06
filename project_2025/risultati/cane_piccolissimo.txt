@@ -1,0 +1,55 @@
+immagini: cane_piccolissimo_sigma (in sim1 cambio il sigma al denominatore)
+(in tutti maxiter = 20, time limit = 300)
+
+sigma  =  1 
+Optimal objective: 4.96665e-09
+Best lambda: 1.3239508641345482e-12
+Best cut value: 4.9666486936547e-09
+Source set size: 202
+Sink set size: 1698
+
+
+sigma = 10
+
+Optimal objective: 0.171559
+Time limit or max iterations reached.
+Best lambda: 0.0
+Best cut value: 0.17155880729980977
+Source set size: 693
+Sink set size: 1207
+
+
+sigma = 40 (no immagine salva solo i 2 pixel del source che gli dici all'inizio)
+Optimal objective: 2.07346
+Time limit or max iterations reached.
+Best lambda: 0.0
+Best cut value: 2.073457311195648
+Source set size: 2
+Sink set size: 1898
+
+
+sigma = 20 (idem)
+
+Optimal objective: 1.2507
+Time limit or max iterations reached.
+Best lambda: 0.0
+Best cut value: 1.2506980711768318
+Source set size: 2
+Sink set size: 1898
+
+
+sigma = 0.1 (idem)
+
+Optimal objective: 5.73276e-09
+Best lambda: 5.529284618015119e-12
+Best cut value: 5.73275608464796e-09
+Source set size: 2
+Sink set size: 1898
+
+
+sigma = 0.01 (idem)  (mando il lambda a zero??? quindi le z a zero quindi non taglio????)
+Optimal objective: 5.27441e-13
+Best lambda: 5.087209529989998e-16
+Best cut value: 5.274413129667818e-13
+Source set size: 2
+Sink set size: 1898
