@@ -1,4 +1,0 @@
-Source set size:50944
-Sink set size:16556
-best lambda:1.6841723519886465e-10
-best cut value:-1.0773761140598556e-06

@@ -1,0 +1,5 @@
+Source set size:1987
+Sink set size:65513
+best lambda:2.0216775089129418e-10
+best cut value:1.2713210226900986
+time limit reached

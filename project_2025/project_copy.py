@@ -12,7 +12,7 @@ import gurobipy as grb
 
 def sim1(pixel1, pixel2):  # misura di somiglianza esponenziale
     # pixel1 and pixel2 are both grayscale pixel values
-    sigma = 1
+    sigma = 10
     return np.exp(-abs(pixel1 - pixel2)/sigma)
 
 def sim2(pixel1, pixel2):
@@ -178,7 +178,7 @@ def Plot_image_cuts(sets, G, source_pixels = None, sink_pixels = None, image_nam
         plt.show()
     else:
         plt.savefig(image_name[:-4] + "_segmented.png")
-        plt.show()
+        plt.show(block=False)
 
 # --------------------------------------------------------------------------------
 
