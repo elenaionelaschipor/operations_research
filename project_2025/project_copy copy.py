@@ -1,5 +1,5 @@
-# created by Elena
-# 30/08/25
+# created by Elena 
+
 
 import numpy as np
 import networkx as nx
@@ -12,16 +12,17 @@ import gurobipy as grb
 
 def sim1(pixel1, pixel2):  # misura di somiglianza esponenziale
     # pixel1 and pixel2 are both grayscale pixel values
-    return np.exp(-abs(pixel1 - pixel2)/255)
+    sigma = 10
+    return np.exp(-abs(pixel1 - pixel2)/sigma)
 
 def sim2(pixel1, pixel2):
-    return 1/(1 + (abs(pixel1 - pixel2)/255)**2)
+    return 1/(1 + (abs(pixel1 - pixel2))**2)
 # -----------------------------------------------------------------
 
 def costruisci_grafo_base(image):
     G = nx.Graph()
     h, w = image.shape
-    print(h,w)
+    # print(h,w)
     for i in range(h):
         for j in range(w):
             G.add_node((i, j), intensity=image[i, j])
@@ -117,10 +118,10 @@ def capacity1(sets, G, cutted_edges = None):
         # S_bar = nx.difference(G, S)
         S_bar = G.copy()
         S_bar.remove_nodes_from(n for n in G if n in S)
-        print(S_bar)
+        # print(S_bar)
         if cutted_edges == None:
             cutted_edges = get_cutted_edges(S, S_bar, G)
-            print(cutted_edges)
+            # print(cutted_edges)
         return sum([G[u][v]['weight1'] for u, v in cutted_edges])
         
     else:
@@ -152,30 +153,32 @@ def Plot_graph_cuts(sets, G):
 
 # --------------------------------------------------------------------------------
 
-def Plot_image_cuts(sets, G, source_pixels = None, sink_pixels = None):
+def Plot_image_cuts(sets, G, source_pixels = None, sink_pixels = None, image_name =None):
     h = max([a[1] for a in G.nodes()]) + 1
     w = max([a[0] for a in G.nodes()]) + 1
 
     image = np.repeat(np.array([G.nodes()[n]['intensity']/255 for n in G.nodes()])
                                 .reshape(w,h,1), 3, axis=-1)
-
-    cmap = plt.get_cmap('tab20')
+    from matplotlib.colors import ListedColormap
+    cmap =  ListedColormap(["red", "blue"])
     # print(cmap)
     for idx, V in enumerate(sets):
         # color = np.array(cmap(idx % cmap.N)[:])
         for node in V.nodes():
-            print(node)
-            image[node[0], node[1], :] = 0.7 * image[node[0], node[1], :] + 0.3*np.array([cmap(idx % cmap.N)[:3]])
-    # image[20,30,:] = [255,0,0]
+            image[node[0], node[1], :] = 0.5 * image[node[0], node[1], :] + 0.5*np.array([cmap(idx % cmap.N)[:3]])
     plt.imshow(image)
     if source_pixels != None and sink_pixels != None:
         for sp in source_pixels:
-            plt.scatter(sp[0], sp[1], color='blue', s=100, marker='o', label='Source Pixel' if sp == source_pixels[0] else "")
+            plt.scatter(sp[0], sp[1], color='black', s=100, marker='*', label='Source Pixel' if sp == source_pixels[0] else "")
         for tp in sink_pixels:
-            plt.scatter(tp[0], tp[1], color='red', s=100, marker='x', label='Sink Pixel' if tp == sink_pixels[0] else "")
+            plt.scatter(tp[0], tp[1], color='black', s=100, marker='4', label='Sink Pixel' if tp == sink_pixels[0] else "")
         plt.legend(loc='upper right')
     plt.axis('off')
-    plt.show()
+    if image_name == None:
+        plt.show()
+    else:
+        plt.savefig(image_name[:-4] + "_segmented.png")
+        plt.show()
 
 # --------------------------------------------------------------------------------
 
@@ -222,8 +225,8 @@ def costruisci_grafo_st(G, lambda_, source, sink):
 def MinCut(image, source_pixels, sink_pixels, lambda_):
     G = costruisci_grafo_base(image)
     # source_pixels devono essere una lista [(x1,y1), (x2,y2)] e sink_pixels [(x3,y3), (x4,y4)] 
-    source = (source_pixels[1], source_pixels[0]) # come edge del grafo
-    sink = (sink_pixels[1], sink_pixels[0]) # come edge del grafo
+    source = (source_pixels[0], source_pixels[1]) # come edge del grafo
+    sink = (sink_pixels[0], sink_pixels[1]) # come edge del grafo
 
     # print(source, sink)
     # G_st = costruisci_grafo_st(G, lambda_, source, sink) # ora ho il grafo con s e t come nodi
@@ -243,6 +246,7 @@ def MinCut(image, source_pixels, sink_pixels, lambda_):
     y = {}      # y[edge] = 1 se edge è nel source set
     for index, edge in enumerate(G.edges()): 
         # print(edge)
+
         y[edge] = model.addVar(lb=0, ub=1, obj = - lambda_*G.edges[edge]['weight2'],  vtype=GRB.CONTINUOUS, name=f"y_{edge}")
     
     z = {}      # z[edge] = 1 se edge è nel cut
@@ -275,7 +279,7 @@ def MinCut(image, source_pixels, sink_pixels, lambda_):
         model.addConstr(1+z[edge] >= y[edge])
         model.addConstr(1+y[edge] >= z[edge])
 
-    print("######## MODEL")
+    print("######## ADDED CONSTRAINTS, OPTIMIZING....")
     model.modelSense = grb.GRB.MINIMIZE
     model.update()
     
@@ -302,7 +306,7 @@ def MinCut(image, source_pixels, sink_pixels, lambda_):
 
 # --------------------------------------------------------
 
-def parametric_min_cut(image, source_pixels, sink_pixels, time_limit = 300, max_iter = 100):
+def parametric_min_cut(image, source_pixels, sink_pixels, time_limit = 300, max_iter = 100, max_stall = 20):
     from time import time
     start_time = time()
     G = costruisci_grafo_base(image)
@@ -315,121 +319,79 @@ def parametric_min_cut(image, source_pixels, sink_pixels, time_limit = 300, max_
     # best_source_set = None
     # best_sink_set = None
     iter_ = 0
-
+    stall = 0
     t = 1
+    t_his = 1
     source_set, sink_set, cut, sol_x, sol_y, sol_z = MinCut(image, source_pixels, sink_pixels, t) 
-
-    while abs(cut) >=  0.001:
+    source_his = source_set
+    sink_his = sink_set
+    cut_his = cut
+    x_his = sol_x
+    y_his = sol_y
+    z_his = sol_z
+    while abs(cut) >=  0.00001:
         t = sum([G.edges[e]['weight1'] for e in G.edges() if sol_z[e] > 0.5]) / sum([G.edges[e]['weight2'] for e in G.edges() if sol_y[e] > 0.5])
         print("t = ", t, "------------------------------------------------")
         source_set, sink_set, cut, sol_x, sol_y, sol_z = MinCut(image, source_pixels, sink_pixels, t) 
         iter_ += 1
-        if time() - start_time > time_limit or iter_ >= max_iter:   
-            print("Time limit or max iterations reached.")
+        flag = ""
+        if t == t_his:
+            stall += 1
+            print("warning, same value of t")
+            if source_his == source_set and sink_his == sink_set and x_his == sol_x and y_his == sol_y and z_his == sol_z:
+                print("Generating the same partition and the same solutions. Stopping to avoid looping")
+                flag = "looping"
+                break
+        if time() - start_time > time_limit:   
+            print("Time limit reached.")
+            flag = "time limit reached"
             break
-    
-    # lambda_1 = -10000
-    # lambda_3 = 10000
-    # iter_ = 0
-    # source_1, sink_1, cut_value_1, sol_x1, sol_y1, sol_z1 = MinCut(image, source_pixels, sink_pixels, lambda_1)
-    # source_3, sink_3, cut_value_3, sol_x3, sol_y3, sol_z3 = MinCut(image, source_pixels, sink_pixels, lambda_3)
-    # print("#################### calculated cuts for lambda_1 and lambda_3")
-    # while lambda_3 - lambda_1 > 0.01:  # precisione di 0.01
-        
-    #     if cut_value_1 == None or cut_value_3 == None:
-    #         raise ValueError("MinCut did not return a valid solution for given lambda values.")
-    #     if source_1 == source_3 and sink_1 == sink_3:
-    #         print("Same cut found for both lambda values.")
-    #     if source_1 != source_3 or sink_1 != sink_3:
-    #         print("Different cuts found for lambda_1 = {} and lambda_3 = {}".format(lambda_1, lambda_3))
+        if iter_ >= max_iter:
+            print("max iterations reached.")
+            flag = "max iterations reached."
+            break
+        t_his = t
+        source_his = source_set
+        sink_his = sink_set
+        x_his = sol_x 
+        y_his = sol_y
+        z_his = sol_z
 
-
-    #     if cut_value_1 < 0 and cut_value_3 < 0 or cut_value_1 > 0 and cut_value_3 > 0:
-    #         raise ValueError("You should find better lambdas, the cuts are both of the same sign")
-
-    #     if abs(cut_value_1) <= 0.00001:
-    #         best_lambda = lambda_1
-    #         best_cut_value = cut_value_1
-    #         best_source_set = source_1
-    #         best_sink_set = sink_1 
-
-    #     if abs(cut_value_3) <= 0.00001:
-    #         best_lambda = lambda_3
-    #         best_cut_value = cut_value_3
-    #         best_source_set = source_3
-    #         best_sink_set = sink_3
-
-    #     print("################ calculating cuts for lambda_2")
-    #     lambda_2 = (lambda_1+lambda_3)/2
-    #     source_2, sink_2, cut_value_2, sol_x2, sol_y2, sol_z2 = MinCut(image, source_pixels, sink_pixels, lambda_2)
-
-        
-    #     if abs(cut_value_2) <= 0.00001:
-    #         best_lambda = lambda_2
-    #         best_cut_value = cut_value_2
-    #         best_source_set = source_2
-    #         best_sink_set = sink_2
-    #         break
-    #     print("############################## updating")
-    #     if cut_value_2 < 0:
-    #         lamnda_1 = lambda_2
-    #         source_1 = source_2
-    #         sink_1 = sink_2
-    #         cut_value_1 = cut_value_2
-    #         sol_x1 = sol_x2
-    #         sol_y1 = sol_y2
-    #         sol_z1 = sol_z2
-        
-    #     if cut_value_2 > 0 :
-    #         lambda_3 = lambda_2
-    #         source_3 = source_2
-    #         sink_3 = sink_2
-    #         cut_value_3 = cut_value_2
-    #         sol_x3 = sol_x2
-    #         sol_y3 = sol_y2
-    #         sol_z3 = sol_z2
-
-    #     iter_ += 1
-    #     if time() - start_time > time_limit or iter_ >= max_iter:   
-    #         print("Time limit or max iterations reached.")
-    #         break
-
-    return source_set, sink_set, cut, sol_x, sol_y, sol_z, t
-
-
+    return source_set, sink_set, cut, sol_x, sol_y, sol_z, t, flag
 
 if __name__ == "__main__":
-    image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/nerojpg.jpg')
+    """
+    # image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/cane.jpg')
 
-    plt.imshow(image)
-    plt.axis('off')
-    plt.show()
+    # plt.imshow(image)
+    # plt.axis('off')
+    # plt.show()
 
-    image_bn = np.mean(image, axis=2)
+    # image_bn = np.mean(image, axis=2)
 
-    plt.imshow(image_bn, cmap='gray')
-    plt.axis('off')
-    plt.show()
+    # plt.imshow(image_bn, cmap='gray')
+    # plt.axis('off')
+    # plt.show()
 
-    # print(image_bn)
-    G = costruisci_grafo_base(image_bn)
+    # # print(image_bn)
+    # G = costruisci_grafo_base(image_bn)
     # print(G.edges(data=True))
-    Plot_graph(G, values = [k[2]['weight1'] for k in G.edges(data=True)])   # giustamente in una immagine ad alta risoluzione non si vede il reticolo
+    # Plot_graph(G, values = [k[2]['weight1'] for k in G.edges(data=True)])   # giustamente in una immagine ad alta risoluzione non si vede il reticolo
 
-    print("prova del 9 con la capacità")
-    print("capacità di G con taglio G = ",  capacity1([G], G)) 
+    # print("prova del 9 con la capacità")
+    # print("capacità di G con taglio G = ",  capacity1([G], G)) 
 
-    print("tentativo di dividere")
+    # print("tentativo di dividere")
 
-    print("nodi totali ", len(G.nodes))
+    # print("nodi totali ", len(G.nodes))
     
-    sets = []
-    for i in range(11):
-        sub_nodes = list(G.nodes)[i*6750: 6750*(i+1)]  # primi 100 nodi
-        V= G.subgraph(sub_nodes)
-        sets.append(V)
+    # sets = []
+    # for i in range(11):
+    #     sub_nodes = list(G.nodes)[i*6750: 6750*(i+1)]  # primi 100 nodi
+    #     V= G.subgraph(sub_nodes)
+    #     sets.append(V)
 
-    print("cut cost:", capacity1(sets, G))
+    # print("cut cost:", capacity1(sets, G))
 
     # print("plotting cuts")
     # Plot_graph_cuts(sets, G)
@@ -438,31 +400,72 @@ if __name__ == "__main__":
     # print(Laplacian(G))
 
 
-    lambda_ = 0.0000000000001
-    sink_pixels = [(5,5), (5,6)]
-    # sink_pixels = [(55,50), (55, 51)] per cane piccolo
-    # source_pixels = [(30,20),(31,20)] per cane piccolissimo
-    # source_pixels = [(95, 70), (95, 71)]
-    source_pixels = [(25, 25), (25, 26)]
+    # sink_pixels = [(5,5), (5,6)]
+    # source_pixels = [(160, 115), (160, 116)] # per cane
+    # source_pixels = [(55,50), (55, 51)] # per cane piccolo
+    # source_pixels = [(30,20),(31,20)] # per cane piccolissimo
+    # source_pixels = [(95, 70), (95, 71)] # per luna
+    # source_pixels = [(25, 25), (25, 26)] # per blob nero
+
+
+    # lambda_  = 1
     # source_set, sink_set, cut_value, sol_x, sol_y, sol_z = MinCut(image_bn, source_pixels, sink_pixels, lambda_)
-    # print("Cut value for lambda =", lambda_, "is", cut_value)
-    # print("Source set size:", len(source_set)) 
-    # print("Sink set size:", len(sink_set))
-    # Plot_image_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G, source_pixels, sink_pixels)
 
-    # Plot_graph_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G)
+    # source_set, sink_set, cut, sol_x, sol_y, sol_z, t, flag = parametric_min_cut(image_bn, source_pixels, sink_pixels, time_limit=300, max_iter=50)
+
+    # print("Best lambda:", t)
+    # print("Best cut value:", cut)
+
+    # if source_set != None and sink_set != None:
+    #     print("Source set size:", len(source_set))
+    #     print("Sink set size:", len(sink_set))
+    #     Plot_image_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G, source_pixels, sink_pixels)
+    """
+
+    images = {}
+    images["cane_piccolissimo.jpg"] =  [(30,20),(31,20)]
+    images["cane_piccolo.jpg"] = [(55,50), (55, 51)]
+    images["cane.jpg"] = [(160, 115), (160, 116)]
+    images["luna.jpg"] = [(95, 70), (95, 71)]
+    images["gatto.jpg"] = [(150, 113), (150, 114)]
+    images["fiori_rossi.jpg"] = [(170, 118), (170, 119)]
+    images["fiori_rosa.jpg"]= [(100, 70), (100, 71)]
+    images["fiori_bianchi.jpg"] = [(190, 120), (190, 121)]
+    images["fiore_giallo.jpg"] = [(80,80), (80,81)]
+    # images["nerojpg.jpg"] = [(20,30), (20,31)]
+
+    import json 
+
+    for image_name in images:  
+        print("#####################"+image_name + "#####################") 
+        image = plt.imread('C:/Users/elena/Documents/GitHub/operations_research/project_2025/images/'+ image_name)
+        image_bn = np.mean(image, axis=2)
+        sink_pixels = [(5,5), (5,6)]
+        source_pixels = images[image_name]
+        
+
+        source_set, sink_set, cut, sol_x, sol_y, sol_z, t, flag = parametric_min_cut(image_bn, source_pixels, sink_pixels, time_limit=600, max_iter=50, max_stall = 10)
 
 
-
-    source_set, sink_set, cut, sol_x, sol_y, sol_z, t = parametric_min_cut(image_bn, source_pixels, sink_pixels, time_limit=300, max_iter=20)
-
-    print("Best lambda:", t)
-    print("Best cut value:", cut)
-
-
-
-    if source_set != None and sink_set != None:
+        G = costruisci_grafo_base(image_bn)
+        
         print("Source set size:", len(source_set))
         print("Sink set size:", len(sink_set))
-        Plot_image_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G)
         
+        Plot_image_cuts([G.subgraph(source_set), G.subgraph(sink_set)], G, source_pixels, sink_pixels, image_name)
+        
+
+        import json
+        with open("C:/Users/elena/Documents/GitHub/operations_research/project_2025/"+ image_name[:-4] + "_x.json", "w") as file: 
+            json.dump(str(sol_x), file)
+        with open("C:/Users/elena/Documents/GitHub/operations_research/project_2025/"+ image_name[:-4] + "_y.json", "w") as file: 
+            json.dump(str(sol_y), file)
+        with open("C:/Users/elena/Documents/GitHub/operations_research/project_2025/"+ image_name[:-4] + "_z.json", "w") as file: 
+            json.dump(str(sol_z), file)
+        with open("C:/Users/elena/Documents/GitHub/operations_research/project_2025/"+ image_name[:-4] + "_info.txt", "w") as file:
+            file.write("Source set size:" + str(len(source_set))+ "\n")
+            file.write("Sink set size:"+ str(len(sink_set))+"\n")
+            file.write("best lambda:" + str(t) +"\n")
+            file.write("best cut value:" + str(cut) + "\n")
+            file.write(flag)
+            # --------------------------------------------------------
